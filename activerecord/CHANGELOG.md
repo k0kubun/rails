@@ -1,3 +1,9 @@
+*   Unscope preload and includes in unscoped block.
+
+    Fixes #11036.
+
+    *Takashi Kokubun*
+
 *   No verbose backtrace by db:drop when database does not exist.
 
     Fixes #16295.
