@@ -73,6 +73,41 @@ module ActionView
         end
       end
 
+      class ERBEngine < ::ERB
+        class Compiler < ::ERB::Compiler
+          BLOCK_EXPR = /\s*((\s+|\))do|\{)(\s*\|[^|]*\|)?\s*\Z/
+
+          def add_insert_cmd(out, content)
+            if content =~ BLOCK_EXPR
+              out.push("#{@insert_cmd} #{content} ")
+            else
+              out.push("#{@insert_cmd}((#{content}).to_s)")
+            end
+          end
+        end
+
+        def src
+          trim_magic_comment(super)
+        end
+
+        def make_compiler(trim_mode)
+          Compiler.new(trim_mode)
+        end
+
+        def set_eoutvar(compiler, eoutvar = '@output_buffer')
+          compiler.put_cmd = "#{eoutvar}.safe_append="
+          compiler.insert_cmd = "#{eoutvar}.safe_append="
+          compiler.pre_cmd = ["#{eoutvar} = output_buffer || ActionView::OutputBuffer.new"]
+          compiler.post_cmd = ["#{eoutvar}.to_s"]
+        end
+
+        private
+
+        def trim_magic_comment(src)
+          src.sub(/\A#coding:[^\n]*\n/, '')
+        end
+      end
+
       class ERB
         # Specify trim mode for the ERB compiler. Defaults to '-'.
         # See ERB documentation for suitable values.
@@ -81,7 +116,7 @@ module ActionView
 
         # Default implementation used.
         class_attribute :erb_implementation
-        self.erb_implementation = Erubis
+        self.erb_implementation = ERBEngine
 
         # Do not escape templates of these mime types.
         class_attribute :escape_whitelist
@@ -118,8 +153,9 @@ module ActionView
 
           self.class.erb_implementation.new(
             erb,
-            :escape => (self.class.escape_whitelist.include? template.type),
-            :trim => (self.class.erb_trim_mode == "-")
+            nil,
+            self.class.erb_trim_mode,
+            '@output_buffer',
           ).src
         end
 
